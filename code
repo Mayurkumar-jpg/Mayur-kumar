@@ -1,0 +1,130 @@
+const passwordInput = document.getElementById("password");
+const progress = document.getElementById("progress");
+const percentage = document.getElementById("percentage");
+const strengthLabel = document.getElementById("strengthLabel");
+const checklist = document.getElementById("checklist");
+const suggestions = document.getElementById("suggestions");
+const entropyText = document.getElementById("entropy");
+const crackTimeText = document.getElementById("crackTime");
+
+const commonPasswords = ["password","123456","admin","qwerty","abc123"];
+
+passwordInput.addEventListener("input", debounce(analyzePassword, 200));
+
+function analyzePassword() {
+  const pwd = passwordInput.value;
+
+  let score = 0;
+  let checks = {
+    length: pwd.length >= 8,
+    long: pwd.length >= 12,
+    upper: /[A-Z]/.test(pwd),
+    lower: /[a-z]/.test(pwd),
+    number: /\d/.test(pwd),
+    symbol: /[^A-Za-z0-9]/.test(pwd),
+    noSpace: !/\s/.test(pwd),
+    common: !commonPasswords.includes(pwd)
+  };
+
+  score += checks.length ? 10 : 0;
+  score += checks.long ? 10 : 0;
+  score += checks.upper ? 10 : 0;
+  score += checks.lower ? 10 : 0;
+  score += checks.number ? 10 : 0;
+  score += checks.symbol ? 10 : 0;
+  score += checks.noSpace ? 10 : 0;
+  score += checks.common ? 20 : 0;
+
+  updateUI(score, checks, pwd);
+}
+
+function updateUI(score, checks, pwd) {
+  progress.style.width = score + "%";
+  percentage.innerText = score + "%";
+
+  const levels = ["Very Weak","Weak","Medium","Strong","Very Strong"];
+  const index = Math.floor(score / 20);
+  strengthLabel.innerText = "Strength: " + levels[index];
+
+  checklist.innerHTML = Object.entries(checks)
+    .map(([k,v]) => `<li class="${v?'valid':'invalid'}">${k}</li>`).join("");
+
+  generateSuggestions(checks);
+  calculateEntropy(pwd);
+}
+
+function generateSuggestions(checks) {
+  suggestions.innerHTML = "";
+  if (!checks.upper) suggestions.innerHTML += "<li>Add uppercase</li>";
+  if (!checks.number) suggestions.innerHTML += "<li>Add numbers</li>";
+  if (!checks.symbol) suggestions.innerHTML += "<li>Add symbols</li>";
+}
+
+function calculateEntropy(pwd) {
+  let pool = 0;
+  if (/[a-z]/.test(pwd)) pool += 26;
+  if (/[A-Z]/.test(pwd)) pool += 26;
+  if (/\d/.test(pwd)) pool += 10;
+  if (/[^A-Za-z0-9]/.test(pwd)) pool += 32;
+
+  let entropy = pwd.length * Math.log2(pool || 1);
+  entropyText.innerText = entropy.toFixed(2);
+
+  crackTimeText.innerText = estimateTime(entropy);
+}
+
+function estimateTime(bits) {
+  if (bits < 20) return "Instant";
+  if (bits < 40) return "Seconds";
+  if (bits < 60) return "Minutes";
+  if (bits < 80) return "Hours";
+  if (bits < 100) return "Days";
+  return "Years+";
+}
+
+function debounce(fn, delay) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+}
+
+// Generator
+document.getElementById("generate").onclick = () => {
+  const length = document.getElementById("length").value;
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()";
+  
+  let pwd = "";
+  const array = new Uint32Array(length);
+  crypto.getRandomValues(array);
+
+  for (let i = 0; i < length; i++) {
+    pwd += chars[array[i] % chars.length];
+  }
+
+  passwordInput.value = pwd;
+  saveHistory(pwd);
+  analyzePassword();
+};
+
+function saveHistory(pwd) {
+  let history = JSON.parse(localStorage.getItem("history")) || [];
+  history.unshift(pwd);
+  history = history.slice(0,5);
+  localStorage.setItem("history", JSON.stringify(history));
+  renderHistory();
+}
+
+function renderHistory() {
+  let history = JSON.parse(localStorage.getItem("history")) || [];
+  document.getElementById("history").innerHTML =
+    history.map(p => `<li>${p}</li>`).join("");
+}
+
+renderHistory();
+
+// Theme toggle
+document.getElementById("themeToggle").onclick = () => {
+  document.body.classList.toggle("light");
+};
